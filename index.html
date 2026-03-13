@@ -1044,7 +1044,7 @@
                 <div class="position-monitor">
                     <div class="pos-header">
                         <span class="pos-ticker">${pos.ticker}</span>
-                        <span class="pos-price">${formatNumber(pos.current_price || 0)}</span>
+                        <span class="pos-price">${formatNumber(pos.current_price || pos.mark || 0)}</span>
                         <span class="pos-pnl ${(pos.pnl || 0) >= 0 ? 'positive' : 'negative'}">
                             ${(pos.pnl || 0) >= 0 ? '+' : ''}${formatNumber(pos.pnl || 0)} (${(pos.pnl_pct || 0) >= 0 ? '+' : ''}${(pos.pnl_pct || 0).toFixed(1)}%)
                         </span>
@@ -1262,7 +1262,7 @@
 
         function renderPositionsTab() {
             const positions = D.positions || [];
-            const pnlData = positions.map(p => ({ label: p.ticker, value: p.pnl || 0 }));
+            const pnlData = positions.map(p => ({ label: p.ticker, value: p.pnl || 0, type: p.type || '' }));
 
             const html = `
                 <div class="chart-container col-span-full">
@@ -1284,7 +1284,7 @@
                                     </div>
                                     <div class="pos-detail-item">
                                         <span class="pos-detail-label">Current</span>
-                                        <span class="pos-detail-value">${formatNumber(pos.current_price || 0)}</span>
+                                        <span class="pos-detail-value">${formatNumber(pos.current_price || pos.mark || 0)}</span>
                                     </div>
                                     <div class="pos-detail-item">
                                         <span class="pos-detail-label">Size</span>
@@ -1318,22 +1318,45 @@
             if (chartInstances.pnlChart) chartInstances.pnlChart.destroy();
 
             const ctx = document.getElementById('pnlChart').getContext('2d');
+            // Use P&L % for chart scale so HOOD doesn't dominate
+            const positions = D.positions || [];
+            const pctData = positions.map(p => ({ label: p.ticker, pct: p.pnl_pct || 0, dollar: p.pnl || 0 }));
+
             chartInstances.pnlChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: data.map(d => d.label),
+                    labels: pctData.map(d => d.label),
                     datasets: [{
-                        label: 'P&L',
-                        data: data.map(d => d.value),
-                        backgroundColor: data.map(d => d.value >= 0 ? '#00e396' : '#ff4560')
+                        label: 'P&L %',
+                        data: pctData.map(d => d.pct),
+                        backgroundColor: pctData.map(d => d.pct >= 0 ? '#00e396' : '#ff4560'),
+                        borderRadius: 4,
+                        barPercentage: 0.6
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    const d = pctData[ctx.dataIndex];
+                                    return `${d.pct > 0 ? '+' : ''}${d.pct.toFixed(1)}%  ($${d.dollar > 0 ? '+' : ''}${d.dollar.toLocaleString()})`;
+                                }
+                            }
+                        }
+                    },
                     scales: {
-                        y: { grid: { color: '#1a2540' }, ticks: { color: '#8899bb', font: { family: 'JetBrains Mono' } } },
+                        y: {
+                            grid: { color: '#1a2540' },
+                            ticks: {
+                                color: '#8899bb',
+                                font: { family: 'JetBrains Mono' },
+                                callback: v => v + '%'
+                            }
+                        },
                         x: { grid: { display: false }, ticks: { color: '#8899bb' } }
                     }
                 }
